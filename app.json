@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "X-pand Limits",
+    "slug": "xpand-limits-mockup-v11",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  }
+}
