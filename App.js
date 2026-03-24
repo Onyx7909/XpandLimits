@@ -18,7 +18,7 @@ import { supabase } from "./supabase";
 const APP_NAME = "X-pand Limits";
 const BG = require("./assets/images/lightning-realistic.jpg");
 
-const MUSCLE_GROUPS = ["Chest", "Back", "Shoulders", "Legs", "Arms"];
+const MUSCLE_GROUPS = ["Chest", "Back", "Shoulders", "Legs", "Biceps", "Triceps"];
 const EQUIPMENT = ["Dumbbell", "Barbell", "Cable", "Machine"];
 const LANGUAGES = [
   { code: "system", label: "System" },
@@ -84,6 +84,10 @@ const STRINGS = {
     selectedLanguage: "Selected language",
     sessionsCount: "sessions",
     done: "Done",
+    weightUnit: "Weight unit",
+    kilograms: "Kg",
+    pounds: "Lbs",
+    signOut: "Sign out",
   },
   nl: {
     signIn: "Inloggen",
@@ -819,7 +823,7 @@ const EXERCISES = [
     id: "2",
     name: "Bench Press",
     equipment: "Barbell",
-    muscles: ["Chest", "Shoulders", "Arms"],
+    muscles: ["Chest", "Shoulders", "Triceps"],
     how: "Unrack, lower to mid-chest, press back up in a strong line.",
     tips: "Pull shoulders back. Keep feet planted.",
   },
@@ -835,7 +839,7 @@ const EXERCISES = [
     id: "4",
     name: "Machine Chest Press",
     equipment: "Machine",
-    muscles: ["Chest", "Shoulders", "Arms"],
+    muscles: ["Chest", "Shoulders", "Triceps"],
     how: "Set seat so handles align with chest. Press and control the return.",
     tips: "Avoid shrugging. Keep shoulder blades set.",
   },
@@ -843,7 +847,7 @@ const EXERCISES = [
     id: "5",
     name: "Lat Pulldown",
     equipment: "Cable",
-    muscles: ["Back", "Arms"],
+    muscles: ["Back", "Biceps"],
     how: "Pull bar to upper chest while driving elbows down.",
     tips: "Lean slightly, not excessively. Think elbows to ribs.",
   },
@@ -851,7 +855,7 @@ const EXERCISES = [
     id: "6",
     name: "Seated Cable Row",
     equipment: "Cable",
-    muscles: ["Back", "Arms"],
+    muscles: ["Back", "Biceps"],
     how: "Pull handle to torso with a tall chest and steady core.",
     tips: "Start by moving the elbows, not by yanking with hands.",
   },
@@ -859,7 +863,7 @@ const EXERCISES = [
     id: "7",
     name: "Bent-Over Row",
     equipment: "Barbell",
-    muscles: ["Back", "Arms"],
+    muscles: ["Back", "Biceps"],
     how: "Hinge at the hips, pull the bar toward lower ribs.",
     tips: "Keep torso fixed. Avoid jerking the weight.",
   },
@@ -867,7 +871,7 @@ const EXERCISES = [
     id: "8",
     name: "Machine Shoulder Press",
     equipment: "Machine",
-    muscles: ["Shoulders", "Arms"],
+    muscles: ["Shoulders", "Triceps"],
     how: "Press up while keeping rib cage down and core braced.",
     tips: "Don’t force range if shoulders pinch.",
   },
@@ -899,7 +903,7 @@ const EXERCISES = [
     id: "12",
     name: "Cable Curl",
     equipment: "Cable",
-    muscles: ["Arms"],
+    muscles: ["Biceps"],
     how: "Curl with elbows pinned close to the body.",
     tips: "Keep tension on the cable the whole time.",
   },
@@ -907,7 +911,7 @@ const EXERCISES = [
     id: "13",
     name: "Machine Triceps Press",
     equipment: "Machine",
-    muscles: ["Arms"],
+    muscles: ["Triceps"],
     how: "Extend the handles and control the return.",
     tips: "Keep shoulders down and elbows stable.",
   },
@@ -938,7 +942,7 @@ const initialSessions = [
   },
   {
     id: "s2",
-    groups: ["Back", "Arms"],
+    groups: ["Back", "Biceps"],
     exercises: [
       {
         id: "e3",
@@ -958,7 +962,82 @@ const initialSessions = [
       },
     ],
   },
+
 ];
+
+function normalizeText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function levenshtein(a, b) {
+  const left = normalizeText(a);
+  const right = normalizeText(b);
+  const rows = left.length + 1;
+  const cols = right.length + 1;
+  const dp = Array.from({ length: rows }, () => Array(cols).fill(0));
+
+  for (let i = 0; i < rows; i += 1) dp[i][0] = i;
+  for (let j = 0; j < cols; j += 1) dp[0][j] = j;
+
+  for (let i = 1; i < rows; i += 1) {
+    for (let j = 1; j < cols; j += 1) {
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost,
+      );
+    }
+  }
+
+  return dp[rows - 1][cols - 1];
+}
+
+function scoreExerciseMatch(query, exercise) {
+  const q = normalizeText(query);
+  const name = normalizeText(exercise.name);
+  const equipment = normalizeText(exercise.equipment);
+  const muscles = exercise.muscles.map(normalizeText).join(" ");
+  const haystack = `${name} ${equipment} ${muscles}`.trim();
+
+  if (!q) return 0;
+  if (name === q) return 1000;
+  if (name.startsWith(q)) return 850 - (name.length - q.length);
+  if (name.includes(q)) return 760 - (name.length - q.length);
+  if (haystack.includes(q)) return 650 - (haystack.length - q.length);
+
+  const tokens = q.split(" ").filter(Boolean);
+  let tokenScore = 0;
+  tokens.forEach((token) => {
+    if (name.includes(token)) tokenScore += 90;
+    else if (haystack.includes(token)) tokenScore += 55;
+  });
+
+  const distance = levenshtein(q, name);
+  const maxLen = Math.max(q.length, name.length, 1);
+  const closeness = 1 - distance / maxLen;
+
+  return Math.round(tokenScore + closeness * 420);
+}
+
+function getFuzzyExerciseMatches(query, exercises, limit = 8) {
+  if (!query.trim()) return exercises.slice(0, limit);
+
+  return exercises
+    .map((exercise) => ({
+      exercise,
+      score: scoreExerciseMatch(query, exercise),
+    }))
+    .filter((entry) => entry.score > 120)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((entry) => entry.exercise);
+}
 
 function normalizeSessionRow(row) {
   return {
@@ -1063,36 +1142,141 @@ function Header({ title, onBack, onSettings, t }) {
   );
 }
 
-function Splash({ onDone }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(1)).current;
+function IntroGate({ onDone }) {
+  const splashOpacity = useRef(new Animated.Value(0)).current;
+  const splashScale = useRef(new Animated.Value(0.9)).current;
+  const loginOpacity = useRef(new Animated.Value(0)).current;
+  const loginTranslateY = useRef(new Animated.Value(36)).current;
+  const flashOne = useRef(new Animated.Value(0)).current;
+  const flashTwo = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(0.96)).current;
+  const boltShift = useRef(new Animated.Value(-18)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 650,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.sequence([
-        Animated.delay(1200),
-        Animated.timing(scale, {
-          toValue: 2.1,
-          duration: 1100,
-          easing: Easing.inOut(Easing.cubic),
+    const animation = Animated.sequence([
+      Animated.parallel([
+        Animated.timing(splashOpacity, {
+          toValue: 1,
+          duration: 500,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(splashScale, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.out(Easing.back(1.2)),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 1.04,
+          duration: 1150,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(boltShift, {
+          toValue: 0,
+          duration: 820,
+          easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
       ]),
-    ]).start(() => onDone());
-  }, [onDone, opacity, scale]);
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(flashOne, {
+            toValue: 0.92,
+            duration: 90,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(flashOne, {
+            toValue: 0,
+            duration: 220,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.delay(150),
+          Animated.timing(flashTwo, {
+            toValue: 0.75,
+            duration: 110,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(flashTwo, {
+            toValue: 0,
+            duration: 240,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+      ]),
+      Animated.delay(950),
+      Animated.parallel([
+        Animated.timing(splashOpacity, {
+          toValue: 0,
+          duration: 520,
+          easing: Easing.inOut(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(splashScale, {
+          toValue: 1.14,
+          duration: 520,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(loginOpacity, {
+          toValue: 1,
+          duration: 480,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(loginTranslateY, {
+          toValue: 0,
+          duration: 480,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+    ]);
+
+    animation.start(() => onDone());
+    return () => animation.stop();
+  }, [boltShift, flashOne, flashTwo, loginOpacity, loginTranslateY, onDone, pulse, splashOpacity, splashScale]);
 
   return (
     <Background>
+      <Animated.View pointerEvents="none" style={[styles.introFlash, { opacity: flashOne }]} />
       <Animated.View
-        style={[styles.splashCenter, { opacity, transform: [{ scale }] }]}
+        pointerEvents="none"
+        style={[styles.introFlashSecondary, { opacity: flashTwo }]}
+      />
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.introSplashLayer,
+          {
+            opacity: splashOpacity,
+            transform: [{ scale: splashScale }, { translateY: boltShift }],
+          },
+        ]}
       >
-        <Brand large />
+        <Animated.View style={{ transform: [{ scale: pulse }] }}>
+          <Brand large />
+          <Text style={styles.introTagline}>Charge. Lift. Repeat.</Text>
+        </Animated.View>
+      </Animated.View>
+      <Animated.View
+        style={[
+          styles.introLoginPreview,
+          { opacity: loginOpacity, transform: [{ translateY: loginTranslateY }] },
+        ]}
+      >
+        <Brand />
+        <View style={styles.loginCard}>
+          <Text style={styles.cardTitle}>Sign in</Text>
+          <Text style={styles.helper}>Sign in to sync your sessions</Text>
+        </View>
       </Animated.View>
     </Background>
   );
@@ -1101,10 +1285,31 @@ function Splash({ onDone }) {
 function Login({ t, onLogin, busy, errorText }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(18)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 520,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 520,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [opacity, translateY]);
 
   return (
     <Background>
-      <View style={styles.screen}>
+      <Animated.View
+        style={[styles.screen, { opacity, transform: [{ translateY }] }]}
+      >
         <Brand />
         <View style={styles.loginCard}>
           <Text style={styles.cardTitle}>{t("signIn")}</Text>
@@ -1137,7 +1342,7 @@ function Login({ t, onLogin, busy, errorText }) {
             </Text>
           </Pressable>
         </View>
-      </View>
+      </Animated.View>
     </Background>
   );
 }
@@ -1292,6 +1497,7 @@ function SessionEditor({ t, onSave, onBack }) {
 function SessionDetail({
   session,
   t,
+  weightUnit,
   onBack,
   onAddExercise,
   onDeleteExercise,
@@ -1321,7 +1527,7 @@ function SessionDetail({
                 </View>
                 <View style={styles.statsRow}>
                   <View style={styles.statBox}>
-                    <Text style={styles.statLabel}>{t("weight")}</Text>
+                    <Text style={styles.statLabel}>{`${t("weight")} (${weightUnit})`}</Text>
                     <TextInput
                       style={styles.inlineInput}
                       value={String(ex.weight)}
@@ -1375,12 +1581,30 @@ function ExerciseEditor({ session, t, onBack, onSave }) {
   const [query, setQuery] = useState("");
   const [info, setInfo] = useState(null);
 
-  const filtered = EXERCISES.filter(
-    (x) =>
-      (!equipment || x.equipment === equipment) &&
-      x.muscles.some((m) => session.groups.includes(m)) &&
-      x.name.toLowerCase().includes(query.toLowerCase()),
+  const scopedExercises = useMemo(
+    () =>
+      EXERCISES.filter(
+        (x) =>
+          (!equipment || x.equipment === equipment) &&
+          x.muscles.some((m) => session.groups.includes(m)),
+      ),
+    [equipment, session.groups],
   );
+
+  const filtered = useMemo(() => {
+    const directMatches = scopedExercises.filter((x) =>
+      x.name.toLowerCase().includes(query.toLowerCase()),
+    );
+
+    if (directMatches.length) return directMatches;
+    return getFuzzyExerciseMatches(query, scopedExercises);
+  }, [query, scopedExercises]);
+
+  const suggestion = query.trim() ? filtered[0] : null;
+  const showSuggestion =
+    !!suggestion &&
+    normalizeText(suggestion.name) !== normalizeText(query) &&
+    !suggestion.name.toLowerCase().includes(query.toLowerCase());
 
   return (
     <Background>
@@ -1413,13 +1637,38 @@ function ExerciseEditor({ session, t, onBack, onSave }) {
               onChangeText={setQuery}
               placeholder={t("searchExercise")}
               placeholderTextColor="#9fb2c7"
+              autoCapitalize="words"
+              autoCorrect
             />
             {!equipment && (
               <Text style={styles.helper}>{t("chooseEquipment")}</Text>
             )}
+
+            {showSuggestion && (
+              <Pressable
+                style={styles.smartSuggestion}
+                onPress={() => {
+                  setQuery(suggestion.name);
+                  onSave(suggestion);
+                }}
+              >
+                <Text style={styles.smartSuggestionLabel}>Smart match</Text>
+                <Text style={styles.smartSuggestionName}>{suggestion.name}</Text>
+                <Text style={styles.smartSuggestionMeta}>
+                  Tap to use the exercise your user probably meant.
+                </Text>
+              </Pressable>
+            )}
+
             {filtered.map((item) => (
               <View key={item.id} style={styles.lookupRow}>
-                <Pressable style={{ flex: 1 }} onPress={() => onSave(item)}>
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={() => {
+                    setQuery(item.name);
+                    onSave(item);
+                  }}
+                >
                   <Text style={styles.lookupName}>{item.name}</Text>
                   <Text style={styles.lookupMeta}>
                     {item.equipment} · {item.muscles.join(", ")}
@@ -1430,6 +1679,12 @@ function ExerciseEditor({ session, t, onBack, onSave }) {
                 </Pressable>
               </View>
             ))}
+
+            {!!equipment && !filtered.length && !!query.trim() && (
+              <Text style={styles.helper}>
+                No exact hit. Try another spelling or a different equipment filter.
+              </Text>
+            )}
           </View>
         </ScrollView>
         <InfoModal
@@ -1443,8 +1698,8 @@ function ExerciseEditor({ session, t, onBack, onSave }) {
   );
 }
 
-function SettingsScreen({ lang, setLang, t, onBack, userEmail, onSignOut }) {
-  const [open, setOpen] = useState(false);
+function SettingsScreen({ lang, setLang, weightUnit, setWeightUnit, t, onBack, userEmail, onSignOut }) {
+  const [open, setOpen] = useState(null);
   const selected = LANGUAGES.find((x) => x.code === lang)?.label || "System";
   return (
     <Background>
@@ -1457,8 +1712,15 @@ function SettingsScreen({ lang, setLang, t, onBack, userEmail, onSignOut }) {
           </View>
           <View style={styles.panel}>
             <Text style={styles.cardTitle}>{t("language")}</Text>
-            <Pressable style={styles.dropdown} onPress={() => setOpen(true)}>
+            <Pressable style={styles.dropdown} onPress={() => setOpen("language")}>
               <Text style={styles.dropdownText}>{selected}</Text>
+              <Text style={styles.dropdownArrow}>▾</Text>
+            </Pressable>
+          </View>
+          <View style={styles.panel}>
+            <Text style={styles.cardTitle}>{t("weightUnit")}</Text>
+            <Pressable style={styles.dropdown} onPress={() => setOpen("weight") }>
+              <Text style={styles.dropdownText}>{weightUnit}</Text>
               <Text style={styles.dropdownArrow}>▾</Text>
             </Pressable>
           </View>
@@ -1473,25 +1735,38 @@ function SettingsScreen({ lang, setLang, t, onBack, userEmail, onSignOut }) {
             </Text>
           </View>
           <Pressable style={styles.socialButton} onPress={onSignOut}>
-            <Text style={styles.socialText}>Sign out</Text>
+            <Text style={styles.socialText}>{t("signOut")}</Text>
           </Pressable>
         </ScrollView>
 
-        <Modal transparent visible={open} animationType="fade">
+        <Modal transparent visible={!!open} animationType="fade">
           <View style={styles.modalShade}>
             <View style={styles.dropdownModal}>
-              {LANGUAGES.map((item) => (
-                <Pressable
-                  key={item.code}
-                  style={styles.dropdownOption}
-                  onPress={() => {
-                    setLang(item.code === "system" ? "en" : item.code);
-                    setOpen(false);
-                  }}
-                >
-                  <Text style={styles.dropdownOptionText}>{item.label}</Text>
-                </Pressable>
-              ))}
+              {open === "language"
+                ? LANGUAGES.map((item) => (
+                    <Pressable
+                      key={item.code}
+                      style={styles.dropdownOption}
+                      onPress={() => {
+                        setLang(item.code === "system" ? "en" : item.code);
+                        setOpen(null);
+                      }}
+                    >
+                      <Text style={styles.dropdownOptionText}>{item.label}</Text>
+                    </Pressable>
+                  ))
+                : [t("kilograms"), t("pounds")].map((label, index) => (
+                    <Pressable
+                      key={label}
+                      style={styles.dropdownOption}
+                      onPress={() => {
+                        setWeightUnit(index === 0 ? "Kg" : "Lbs");
+                        setOpen(null);
+                      }}
+                    >
+                      <Text style={styles.dropdownOptionText}>{label}</Text>
+                    </Pressable>
+                  ))}
             </View>
           </View>
         </Modal>
@@ -1501,8 +1776,10 @@ function SettingsScreen({ lang, setLang, t, onBack, userEmail, onSignOut }) {
 }
 
 export default function App() {
-  const [route, setRoute] = useState("splash");
+  const [route, setRoute] = useState("login");
   const [lang, setLang] = useState("en");
+  const [weightUnit, setWeightUnit] = useState("Kg");
+  const [splashDone, setSplashDone] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [authSession, setAuthSession] = useState(null);
@@ -1522,14 +1799,13 @@ export default function App() {
       const { data } = await supabase.auth.getSession();
       if (!mounted) return;
       setAuthSession(data.session ?? null);
-      setRoute(data.session ? "sessions" : "login");
     };
 
     bootstrap();
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthSession(session ?? null);
-      setRoute(session ? "sessions" : "login");
+      if (splashDone) setRoute(session ? "sessions" : "login");
       if (!session) {
         setSessions([]);
         setActiveSessionId(null);
@@ -1540,7 +1816,11 @@ export default function App() {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [splashDone]);
+
+  useEffect(() => {
+    if (splashDone) setRoute(authSession ? "sessions" : "login");
+  }, [splashDone, authSession]);
 
   useEffect(() => {
     let alive = true;
@@ -1708,7 +1988,7 @@ export default function App() {
     }
   };
 
-  if (route === "splash") return <Splash onDone={() => setRoute(authSession ? "sessions" : "login")} />;
+  if (!splashDone) return <IntroGate onDone={() => setSplashDone(true)} />;
   if (route === "login")
     return <Login t={t} onLogin={handleLogin} busy={authBusy} errorText={authError} />;
   if (route === "create-session")
@@ -1727,6 +2007,8 @@ export default function App() {
         t={t}
         onBack={() => setRoute("sessions")}
         userEmail={userEmail}
+        weightUnit={weightUnit}
+        setWeightUnit={setWeightUnit}
         onSignOut={handleSignOut}
       />
     );
@@ -1735,6 +2017,7 @@ export default function App() {
       <SessionDetail
         session={activeSession}
         t={t}
+        weightUnit={weightUnit}
         onBack={() => setRoute("sessions")}
         onAddExercise={() => setRoute("create-exercise")}
         onDeleteExercise={deleteExercise}
@@ -1784,6 +2067,36 @@ const styles = StyleSheet.create({
   },
   contentWrap: { flex: 1 },
   splashCenter: { flex: 1, alignItems: "center", justifyContent: "center" },
+  introSplashLayer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  introLoginPreview: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 22,
+  },
+  introFlash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(175,220,255,0.18)",
+  },
+  introFlashSecondary: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,255,255,0.10)",
+  },
+  introTagline: {
+    marginTop: 14,
+    color: "#d7e7ff",
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 3.2,
+    textTransform: "uppercase",
+    textAlign: "center",
+    textShadowColor: "rgba(120,180,255,0.35)",
+    textShadowRadius: 10,
+  },
   brandLargeWrap: { alignItems: "center" },
   brandLargeText: {
     fontSize: 52,
@@ -2029,6 +2342,32 @@ const styles = StyleSheet.create({
   },
   lookupName: { color: "#fff", fontWeight: "800", fontSize: 16 },
   lookupMeta: { color: "#9eb4cf", fontSize: 13, marginTop: 4 },
+  smartSuggestion: {
+    marginBottom: 14,
+    borderRadius: 20,
+    padding: 14,
+    backgroundColor: "rgba(210,43,43,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255,120,120,0.28)",
+  },
+  smartSuggestionLabel: {
+    color: "#ffd8d8",
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 1.1,
+  },
+  smartSuggestionName: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  smartSuggestionMeta: {
+    color: "#f0c7c7",
+    fontSize: 13,
+    marginTop: 4,
+  },
   infoBtn: {
     width: 34,
     height: 34,

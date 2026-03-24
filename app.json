@@ -11,6 +11,11 @@
       "ios",
       "android",
       "web"
-    ]
+    ],
+    "splash": {
+      "image": "./assets/images/lightning-realistic.jpg",
+      "resizeMode": "cover",
+      "backgroundColor": "#050915"
+    }
   }
 }
