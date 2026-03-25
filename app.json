@@ -1,21 +1,27 @@
 {
   "expo": {
-    "name": "X-pand Limits",
-    "slug": "xpand-limits-mockup-v11",
+    "name": "XpandLimits",
+    "slug": "xpandlimits",
+    "scheme": "xpandlimits",
     "version": "1.0.0",
     "orientation": "portrait",
-    "assetBundlePatterns": [
-      "**/*"
-    ],
-    "platforms": [
-      "ios",
-      "android",
-      "web"
-    ],
+    "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/lightning-realistic.jpg",
       "resizeMode": "cover",
-      "backgroundColor": "#050915"
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.xpandlimits.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.xpandlimits.app"
+    },
+    "web": {
+      "bundler": "metro"
     }
   }
 }

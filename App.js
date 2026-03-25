@@ -13,8 +13,13 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as QueryParams from "expo-auth-session/build/QueryParams";
+import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 import { supabase } from "./supabase";
 
+
+WebBrowser.maybeCompleteAuthSession();
 const APP_NAME = "X-pand Limits";
 const BG = require("./assets/images/lightning-realistic.jpg");
 
@@ -995,9 +1000,17 @@ const EXERCISES = [
   },
 ];
 
+function createUuid() {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = Math.floor(Math.random() * 16);
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 const initialSessions = [
   {
-    id: "s1",
+    id: "6f5d8d7d-8c5b-4ef0-9af6-2f0b2b6fca11",
     groups: ["Chest", "Shoulders"],
     exercises: [
       {
@@ -1019,7 +1032,7 @@ const initialSessions = [
     ],
   },
   {
-    id: "s2",
+    id: "5f9f6d4a-9c3c-47f6-a67f-0cb7f66fd2d4",
     groups: ["Back", "Biceps"],
     exercises: [
       {
@@ -1398,7 +1411,17 @@ function IntroGate({ onDone }) {
   );
 }
 
-function Login({ t, onLogin, busy, errorText }) {
+function Login({
+  t,
+  onSignIn,
+  onSignUp,
+  onForgotPassword,
+  onOAuth,
+  busy,
+  errorText,
+  infoText,
+}) {
+  const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const opacity = useRef(new Animated.Value(0)).current;
@@ -1421,6 +1444,8 @@ function Login({ t, onLogin, busy, errorText }) {
     ]).start();
   }, [opacity, translateY]);
 
+  const submitLabel = mode === "signup" ? "Create account" : "Sign in";
+
   return (
     <Background>
       <Animated.View
@@ -1428,9 +1453,34 @@ function Login({ t, onLogin, busy, errorText }) {
       >
         <Brand />
         <View style={styles.loginCard}>
-          <Text style={styles.cardTitle}>{t("signIn")}</Text>
-          <Text style={styles.helper}>{t("loginHint")}</Text>
+          <Text style={styles.cardTitle}>{submitLabel}</Text>
+          <Text style={styles.helper}>
+            {mode === "forgot"
+              ? "Enter your email and we will send a reset link."
+              : t("loginHint")}
+          </Text>
+
+          <View style={styles.authTabs}>
+            {[
+              { key: "signin", label: "Sign in" },
+              { key: "signup", label: "Create account" },
+              { key: "forgot", label: "Reset" },
+            ].map((tab) => (
+              <Pressable
+                key={tab.key}
+                onPress={() => setMode(tab.key)}
+                style={[styles.authTab, mode === tab.key && styles.authTabActive]}
+              >
+                <Text style={[styles.authTabText, mode === tab.key && styles.authTabTextActive]}>
+                  {tab.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
           {!!errorText && <Text style={styles.errorText}>{errorText}</Text>}
+          {!!infoText && !errorText && <Text style={styles.infoText}>{infoText}</Text>}
+
           <TextInput
             placeholder={t("email")}
             placeholderTextColor="#9fb2c7"
@@ -1440,22 +1490,59 @@ function Login({ t, onLogin, busy, errorText }) {
             autoCapitalize="none"
             keyboardType="email-address"
           />
-          <TextInput
-            placeholder={t("password")}
-            placeholderTextColor="#9fb2c7"
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+
+          {mode !== "forgot" && (
+            <TextInput
+              placeholder={t("password")}
+              placeholderTextColor="#9fb2c7"
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+          )}
+
           <Pressable
             style={[styles.primaryButton, busy && styles.buttonDisabled]}
             disabled={busy}
-            onPress={() => onLogin(email.trim(), password)}
+            onPress={() => {
+              const cleanEmail = email.trim();
+              if (mode === "signup") onSignUp(cleanEmail, password);
+              else if (mode === "forgot") onForgotPassword(cleanEmail);
+              else onSignIn(cleanEmail, password);
+            }}
           >
             <Text style={styles.primaryButtonText}>
-              {busy ? "Connecting..." : t("continueEmail")}
+              {busy
+                ? "Working..."
+                : mode === "signup"
+                ? "Create account"
+                : mode === "forgot"
+                ? "Send reset link"
+                : t("continueEmail")}
             </Text>
+          </Pressable>
+
+          <View style={styles.socialDividerWrap}>
+            <View style={styles.socialDivider} />
+            <Text style={styles.socialDividerText}>or continue with</Text>
+            <View style={styles.socialDivider} />
+          </View>
+
+          <Pressable
+            style={[styles.secondaryButton, busy && styles.buttonDisabled]}
+            disabled={busy}
+            onPress={() => onOAuth("apple")}
+          >
+            <Text style={styles.secondaryButtonText}>{t("continueApple")}</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.secondaryButton, busy && styles.buttonDisabled]}
+            disabled={busy}
+            onPress={() => onOAuth("google")}
+          >
+            <Text style={styles.secondaryButtonText}>{t("continueGoogle")}</Text>
           </Pressable>
         </View>
       </Animated.View>
@@ -2032,12 +2119,14 @@ export default function App() {
   const [authSession, setAuthSession] = useState(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [authInfo, setAuthInfo] = useState("");
   const [loadingRemote, setLoadingRemote] = useState(true);
 
   const t = (key) => tFor(lang, key);
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const userId = authSession?.user?.id;
   const userEmail = authSession?.user?.email || "";
+  const redirectTo = Linking.createURL("auth/callback");
 
   useEffect(() => {
     let mounted = true;
@@ -2070,6 +2159,46 @@ export default function App() {
   }, [splashDone, authSession]);
 
   useEffect(() => {
+    const createSessionFromUrl = async (url) => {
+      try {
+        const { params, errorCode } = QueryParams.getQueryParams(url);
+        if (errorCode) throw new Error(errorCode);
+
+        const accessToken = params.access_token;
+        const refreshToken = params.refresh_token;
+
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (error) throw error;
+          setAuthInfo("Signed in successfully.");
+          return;
+        }
+
+        if (params.type === "recovery") {
+          setAuthInfo("Recovery link opened. You can now reset your password from the email flow.");
+        }
+      } catch (error) {
+        console.log("Deep link auth error:", error.message);
+        setAuthError(error.message);
+      }
+    };
+
+    Linking.getInitialURL().then((url) => {
+      if (url) createSessionFromUrl(url);
+    });
+
+    const sub = Linking.addEventListener("url", ({ url }) => {
+      if (url) createSessionFromUrl(url);
+    });
+
+    return () => sub.remove();
+  }, []);
+
+
+  useEffect(() => {
     let alive = true;
 
     const load = async () => {
@@ -2098,31 +2227,113 @@ export default function App() {
     };
   }, [userId]);
 
-  const handleLogin = async (email, password) => {
+  const handleSignIn = async (email, password) => {
     if (!email || !password) {
       setAuthError("Enter your email and password.");
+      setAuthInfo("");
       return;
     }
 
     setAuthBusy(true);
     setAuthError("");
+    setAuthInfo("");
 
-    const signInResult = await supabase.auth.signInWithPassword({ email, password });
-
-    if (!signInResult.error) {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      setAuthInfo("Welcome back.");
+    } catch (error) {
+      setAuthError(error.message);
+    } finally {
       setAuthBusy(false);
+    }
+  };
+
+  const handleSignUp = async (email, password) => {
+    if (!email || !password) {
+      setAuthError("Enter your email and password.");
+      setAuthInfo("");
       return;
     }
 
-    const signUpResult = await supabase.auth.signUp({ email, password });
+    setAuthBusy(true);
+    setAuthError("");
+    setAuthInfo("");
 
-    if (signUpResult.error) {
-      setAuthError(signUpResult.error.message);
-    } else {
-      setAuthError("Account created. Check your email if confirmation is enabled, then sign in.");
+    try {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) throw error;
+      setAuthInfo("Account created. Check your email if confirmation is enabled, then sign in.");
+    } catch (error) {
+      setAuthError(error.message);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleForgotPassword = async (email) => {
+    if (!email) {
+      setAuthError("Enter your email first.");
+      setAuthInfo("");
+      return;
     }
 
-    setAuthBusy(false);
+    setAuthBusy(true);
+    setAuthError("");
+    setAuthInfo("");
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectTo,
+      });
+      if (error) throw error;
+      setAuthInfo("Password reset email sent.");
+    } catch (error) {
+      setAuthError(error.message);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleOAuth = async (provider) => {
+    setAuthBusy(true);
+    setAuthError("");
+    setAuthInfo("");
+
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) throw error;
+
+      const result = await WebBrowser.openAuthSessionAsync(data?.url ?? "", redirectTo);
+
+      if (result.type === "success" && result.url) {
+        const { params, errorCode } = QueryParams.getQueryParams(result.url);
+        if (errorCode) throw new Error(errorCode);
+
+        const accessToken = params.access_token;
+        const refreshToken = params.refresh_token;
+
+        if (accessToken && refreshToken) {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (sessionError) throw sessionError;
+          setAuthInfo(`${provider === "apple" ? "Apple" : "Google"} sign-in complete.`);
+        }
+      }
+    } catch (error) {
+      setAuthError(error.message || `Failed to sign in with ${provider}.`);
+    } finally {
+      setAuthBusy(false);
+    }
   };
 
   const allExercises = useMemo(() => [...EXERCISES, ...customExercises], [customExercises]);
@@ -2133,7 +2344,7 @@ export default function App() {
   };
 
   const addSession = async (groups) => {
-    const newSession = { id: String(Date.now()), groups, exercises: [] };
+    const newSession = { id: createUuid(), groups, exercises: [] };
     setSessions((prev) => [...prev, newSession]);
     setRoute("sessions");
 
@@ -2260,7 +2471,18 @@ export default function App() {
 
   if (!splashDone) return <IntroGate onDone={() => setSplashDone(true)} />;
   if (route === "login")
-    return <Login t={t} onLogin={handleLogin} busy={authBusy} errorText={authError} />;
+    return (
+      <Login
+        t={t}
+        onSignIn={handleSignIn}
+        onSignUp={handleSignUp}
+        onForgotPassword={handleForgotPassword}
+        onOAuth={handleOAuth}
+        busy={authBusy}
+        errorText={authError}
+        infoText={authInfo}
+      />
+    );
   if (route === "create-session")
     return (
       <SessionEditor
@@ -2481,6 +2703,65 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   primaryButtonText: { color: "#fff", fontWeight: "800", fontSize: 16 },
+  authTabs: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 14,
+    flexWrap: "wrap",
+  },
+  authTab: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  authTabActive: {
+    backgroundColor: "rgba(210,43,43,0.22)",
+    borderColor: "rgba(255,90,90,0.38)",
+  },
+  authTabText: {
+    color: "#c8d7ea",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  authTabTextActive: {
+    color: "#fff",
+  },
+  socialDividerWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 2,
+    marginBottom: 10,
+  },
+  socialDivider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.10)",
+  },
+  socialDividerText: {
+    color: "#9fb2c7",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  secondaryButton: {
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: 18,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+  },
+  secondaryButtonText: {
+    color: "#eef5ff",
+    fontWeight: "700",
+    fontSize: 16,
+  },
   socialButton: {
     backgroundColor: "rgba(255,255,255,0.07)",
     borderRadius: 18,

@@ -1,0 +1,26 @@
+XPANDLIMITS GOOGLE LOGIN FIX
+
+What was fixed in this zip:
+- App.js no longer uses makeRedirectUri(), which can resolve to localhost in Expo Go / web-like flows.
+- App.js now uses Linking.createURL("auth/callback") so Google OAuth returns to xpandlimits://auth/callback.
+- app.json already contains the custom scheme: xpandlimits
+
+What you still need to do:
+1) In Supabase Dashboard -> Authentication -> URL Configuration
+   Add this redirect URL:
+   xpandlimits://**
+
+2) For Google provider setup in Supabase, make sure the Google provider itself is configured correctly.
+
+3) For iPhone testing, Expo Go is unreliable for OAuth deep links.
+   Use a development build or EAS build.
+
+Windows commands to build with EAS:
+   npm install -g eas-cli
+   eas login
+   eas build:configure
+   eas build -p ios --profile development
+
+4) Install the generated build on your iPhone, then test Google login again.
+
+If you only run in Expo Go, localhost-style redirect problems can still appear even with the code fix.
