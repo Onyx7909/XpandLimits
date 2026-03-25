@@ -19,7 +19,7 @@ const APP_NAME = "X-pand Limits";
 const BG = require("./assets/images/lightning-realistic.jpg");
 
 const MUSCLE_GROUPS = ["Chest", "Back", "Shoulders", "Legs", "Biceps", "Triceps"];
-const EQUIPMENT = ["Dumbbell", "Barbell", "Cable", "Machine"];
+const EQUIPMENT = ["Dumbbell", "Barbell", "EZ Bar", "Cable", "Machine"];
 const LANGUAGES = [
   { code: "system", label: "System" },
   { code: "en", label: "English" },
@@ -810,10 +810,14 @@ function tFor(lang, key) {
   return (STRINGS[lang] && STRINGS[lang][key]) || fallbackKeys[key] || key;
 }
 
+const AI_MATCH_CACHE = new Map();
+
 const EXERCISES = [
   {
     id: "1",
     name: "Incline Dumbbell Press",
+    canonical: "Incline Press",
+    aliases: ["incline press", "db incline press"],
     equipment: "Dumbbell",
     muscles: ["Chest", "Shoulders"],
     how: "Set the bench to a low incline. Lower with control, press up through the chest.",
@@ -822,6 +826,8 @@ const EXERCISES = [
   {
     id: "2",
     name: "Bench Press",
+    canonical: "Bench Press",
+    aliases: ["barbell bench", "flat bench"],
     equipment: "Barbell",
     muscles: ["Chest", "Shoulders", "Triceps"],
     how: "Unrack, lower to mid-chest, press back up in a strong line.",
@@ -830,6 +836,8 @@ const EXERCISES = [
   {
     id: "3",
     name: "Cable Fly",
+    canonical: "Chest Fly",
+    aliases: ["cable chest fly", "flyes"],
     equipment: "Cable",
     muscles: ["Chest"],
     how: "Set handles high or mid. Bring arms together in an arc.",
@@ -838,6 +846,8 @@ const EXERCISES = [
   {
     id: "4",
     name: "Machine Chest Press",
+    canonical: "Chest Press",
+    aliases: ["seated chest press", "machine press"],
     equipment: "Machine",
     muscles: ["Chest", "Shoulders", "Triceps"],
     how: "Set seat so handles align with chest. Press and control the return.",
@@ -846,6 +856,8 @@ const EXERCISES = [
   {
     id: "5",
     name: "Lat Pulldown",
+    canonical: "Lat Pulldown",
+    aliases: ["pulldown", "lat pull down", "wide pulldown"],
     equipment: "Cable",
     muscles: ["Back", "Biceps"],
     how: "Pull bar to upper chest while driving elbows down.",
@@ -854,6 +866,8 @@ const EXERCISES = [
   {
     id: "6",
     name: "Seated Cable Row",
+    canonical: "Cable Row",
+    aliases: ["cable row", "seated row", "low row"],
     equipment: "Cable",
     muscles: ["Back", "Biceps"],
     how: "Pull handle to torso with a tall chest and steady core.",
@@ -862,6 +876,8 @@ const EXERCISES = [
   {
     id: "7",
     name: "Bent-Over Row",
+    canonical: "Barbell Row",
+    aliases: ["barbell row", "bent over barbell row"],
     equipment: "Barbell",
     muscles: ["Back", "Biceps"],
     how: "Hinge at the hips, pull the bar toward lower ribs.",
@@ -870,6 +886,8 @@ const EXERCISES = [
   {
     id: "8",
     name: "Machine Shoulder Press",
+    canonical: "Shoulder Press",
+    aliases: ["machine overhead press", "seated shoulder press"],
     equipment: "Machine",
     muscles: ["Shoulders", "Triceps"],
     how: "Press up while keeping rib cage down and core braced.",
@@ -878,6 +896,8 @@ const EXERCISES = [
   {
     id: "9",
     name: "Dumbbell Lateral Raise",
+    canonical: "Lateral Raise",
+    aliases: ["lat raise", "side raise"],
     equipment: "Dumbbell",
     muscles: ["Shoulders"],
     how: "Raise the dumbbells to the side to shoulder height.",
@@ -886,6 +906,8 @@ const EXERCISES = [
   {
     id: "10",
     name: "Leg Press",
+    canonical: "Leg Press",
+    aliases: ["machine leg press"],
     equipment: "Machine",
     muscles: ["Legs"],
     how: "Lower under control and press through the mid-foot.",
@@ -894,6 +916,8 @@ const EXERCISES = [
   {
     id: "11",
     name: "Barbell Squat",
+    canonical: "Squat",
+    aliases: ["back squat", "squat"],
     equipment: "Barbell",
     muscles: ["Legs"],
     how: "Brace, sit down and back, then drive up through the floor.",
@@ -902,6 +926,8 @@ const EXERCISES = [
   {
     id: "12",
     name: "Cable Curl",
+    canonical: "Biceps Curl",
+    aliases: ["cable biceps curl", "curl"],
     equipment: "Cable",
     muscles: ["Biceps"],
     how: "Curl with elbows pinned close to the body.",
@@ -910,10 +936,62 @@ const EXERCISES = [
   {
     id: "13",
     name: "Machine Triceps Press",
+    canonical: "Triceps Press",
+    aliases: ["tricep press", "machine triceps extension"],
     equipment: "Machine",
     muscles: ["Triceps"],
     how: "Extend the handles and control the return.",
     tips: "Keep shoulders down and elbows stable.",
+  },
+  {
+    id: "14",
+    name: "EZ Bar Skullcrusher",
+    canonical: "Skullcrusher",
+    aliases: ["skullcrusher", "skullcrushers", "ez skullcrusher", "french press"],
+    equipment: "EZ Bar",
+    muscles: ["Triceps"],
+    how: "Lower the EZ bar toward the forehead or slightly behind the head, then extend the elbows.",
+    tips: "Keep upper arms mostly fixed and control the lowering phase.",
+  },
+  {
+    id: "15",
+    name: "Dumbbell Skullcrusher",
+    canonical: "Skullcrusher",
+    aliases: ["db skullcrusher", "dumbbell skullcrusher", "skullcrushers"],
+    equipment: "Dumbbell",
+    muscles: ["Triceps"],
+    how: "Lower the dumbbells beside the head, then extend through the elbows.",
+    tips: "Keep elbows steady and avoid flaring too wide.",
+  },
+  {
+    id: "16",
+    name: "Cable Triceps Pushdown",
+    canonical: "Triceps Pushdown",
+    aliases: ["pushdown", "triceps pushdown", "tricep pushdown", "rope pushdown", "pressdown"],
+    equipment: "Cable",
+    muscles: ["Triceps"],
+    how: "Press the handle down by extending the elbows.",
+    tips: "Keep elbows pinned near your torso.",
+  },
+  {
+    id: "17",
+    name: "Single-Arm Lat Pulldown",
+    canonical: "Lat Pulldown",
+    aliases: ["unilateral pulldown", "single arm pulldown", "single-arm pulldown"],
+    equipment: "Cable",
+    muscles: ["Back", "Biceps"],
+    how: "Pull the handle down toward the upper chest while driving the elbow down.",
+    tips: "Think elbow to hip and avoid twisting.",
+  },
+  {
+    id: "18",
+    name: "Machine Lat Pulldown",
+    canonical: "Lat Pulldown",
+    aliases: ["machine pulldown", "pulldown machine"],
+    equipment: "Machine",
+    muscles: ["Back", "Biceps"],
+    how: "Pull the handles down toward the upper chest with control.",
+    tips: "Keep chest up and avoid yanking with momentum.",
   },
 ];
 
@@ -1001,26 +1079,33 @@ function levenshtein(a, b) {
 function scoreExerciseMatch(query, exercise) {
   const q = normalizeText(query);
   const name = normalizeText(exercise.name);
+  const canonical = normalizeText(exercise.canonical || exercise.name);
   const equipment = normalizeText(exercise.equipment);
   const muscles = exercise.muscles.map(normalizeText).join(" ");
-  const haystack = `${name} ${equipment} ${muscles}`.trim();
+  const aliases = (exercise.aliases || []).map(normalizeText);
+  const haystack = `${name} ${canonical} ${aliases.join(" ")} ${equipment} ${muscles}`.trim();
 
   if (!q) return 0;
   if (name === q) return 1000;
-  if (name.startsWith(q)) return 850 - (name.length - q.length);
-  if (name.includes(q)) return 760 - (name.length - q.length);
+  if (canonical === q) return 975;
+  if (aliases.includes(q)) return 960;
+  if (name.startsWith(q) || canonical.startsWith(q)) return 850 - (Math.max(name.length, canonical.length) - q.length);
+  if (name.includes(q) || canonical.includes(q)) return 760 - (Math.max(name.length, canonical.length) - q.length);
   if (haystack.includes(q)) return 650 - (haystack.length - q.length);
 
   const tokens = q.split(" ").filter(Boolean);
   let tokenScore = 0;
   tokens.forEach((token) => {
-    if (name.includes(token)) tokenScore += 90;
+    if (name.includes(token) || canonical.includes(token)) tokenScore += 90;
+    else if (aliases.some((alias) => alias.includes(token))) tokenScore += 80;
     else if (haystack.includes(token)) tokenScore += 55;
   });
 
-  const distance = levenshtein(q, name);
-  const maxLen = Math.max(q.length, name.length, 1);
-  const closeness = 1 - distance / maxLen;
+  const candidates = [name, canonical, ...aliases].filter(Boolean);
+  const distances = candidates.map((candidate) => levenshtein(q, candidate));
+  const bestDistance = Math.min(...distances);
+  const bestLen = Math.max(q.length, ...candidates.map((candidate) => candidate.length), 1);
+  const closeness = 1 - bestDistance / bestLen;
 
   return Math.round(tokenScore + closeness * 420);
 }
@@ -1037,6 +1122,37 @@ function getFuzzyExerciseMatches(query, exercises, limit = 8) {
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map((entry) => entry.exercise);
+}
+
+async function aiMatchExercise({ query, selectedEquipment, selectedMuscles, exercises, lang }) {
+  const cacheKey = JSON.stringify({
+    query: normalizeText(query),
+    selectedEquipment,
+    selectedMuscles: [...selectedMuscles].sort(),
+    lang,
+  });
+
+  if (AI_MATCH_CACHE.has(cacheKey)) {
+    return AI_MATCH_CACHE.get(cacheKey);
+  }
+
+  const { data, error } = await supabase.functions.invoke("match-exercise", {
+    body: {
+      query,
+      selectedEquipment,
+      selectedMuscles,
+      exercises,
+      languageHint: lang,
+    },
+  });
+
+  if (error) {
+    console.log("AI exercise match failed:", error.message || error);
+    return null;
+  }
+
+  AI_MATCH_CACHE.set(cacheKey, data || null);
+  return data || null;
 }
 
 function normalizeSessionRow(row) {
@@ -1347,66 +1463,91 @@ function Login({ t, onLogin, busy, errorText }) {
   );
 }
 
-function SwipeRow({ children, onRemove, t }) {
+function SwipeRow({ children, onRemove }) {
   const translateX = useRef(new Animated.Value(0)).current;
-  const open = useRef(false);
-  const DELETE_WIDTH = 112;
+  const [isOpen, setIsOpen] = useState(false);
+  const DELETE_WIDTH = 86;
 
   const deleteOpacity = translateX.interpolate({
-    inputRange: [-DELETE_WIDTH, -48, 0],
-    outputRange: [1, 0.22, 0],
+    inputRange: [-DELETE_WIDTH, -32, 0],
+    outputRange: [1, 0.45, 0],
     extrapolate: "clamp",
   });
 
   const closeRow = () => {
-    open.current = false;
-    Animated.timing(translateX, {
+    setIsOpen(false);
+    Animated.spring(translateX, {
       toValue: 0,
-      duration: 260,
-      easing: Easing.out(Easing.cubic),
+      tension: 120,
+      friction: 14,
       useNativeDriver: true,
     }).start();
   };
 
   const openRow = () => {
-    open.current = true;
-    Animated.timing(translateX, {
+    setIsOpen(true);
+    Animated.spring(translateX, {
       toValue: -DELETE_WIDTH,
-      duration: 260,
-      easing: Easing.out(Easing.cubic),
+      tension: 120,
+      friction: 14,
       useNativeDriver: true,
     }).start();
+  };
+
+  const removeWithSnap = () => {
+    Animated.timing(translateX, {
+      toValue: -DELETE_WIDTH - 24,
+      duration: 120,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) onRemove?.();
+    });
   };
 
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, g) =>
-          Math.abs(g.dx) > 10 && Math.abs(g.dx) > Math.abs(g.dy),
+          Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
         onPanResponderMove: (_, g) => {
-          const base = open.current ? -DELETE_WIDTH : 0;
-          const dx = Math.max(-DELETE_WIDTH, Math.min(0, base + g.dx * 0.9));
+          const base = isOpen ? -DELETE_WIDTH : 0;
+          const dx = Math.max(-DELETE_WIDTH - 28, Math.min(0, base + g.dx));
           translateX.setValue(dx);
         },
         onPanResponderRelease: (_, g) => {
-          const projected = open.current ? -DELETE_WIDTH + g.dx : g.dx;
-          if (projected < -52) openRow();
-          else closeRow();
+          const projected = (isOpen ? -DELETE_WIDTH : 0) + g.dx;
+
+          if (isOpen && (g.dx < -24 || g.vx < -0.55 || projected < -DELETE_WIDTH - 12)) {
+            removeWithSnap();
+            return;
+          }
+
+          if (!isOpen && (projected < -34 || g.vx < -0.35)) {
+            openRow();
+            return;
+          }
+
+          if (isOpen && (g.dx > 18 || g.vx > 0.35)) {
+            closeRow();
+            return;
+          }
+
+          isOpen ? openRow() : closeRow();
         },
         onPanResponderTerminate: closeRow,
       }),
-    [translateX],
+    [translateX, isOpen],
   );
 
   return (
     <View style={styles.swipeShell}>
       <Animated.View
-        pointerEvents={open.current ? "auto" : "none"}
+        pointerEvents={isOpen ? "auto" : "none"}
         style={[styles.deleteReveal, { opacity: deleteOpacity }]}
       >
-        <Pressable style={styles.deleteIconWrap} onPress={onRemove}>
+        <Pressable style={styles.deleteIconWrap} onPress={onRemove} hitSlop={10}>
           <Text style={styles.deleteIcon}>−</Text>
-          <Text style={styles.deleteText}>{t("remove")}</Text>
         </Pressable>
       </Animated.View>
       <Animated.View
@@ -1576,35 +1717,142 @@ function InfoModal({ visible, item, t, onClose }) {
   );
 }
 
-function ExerciseEditor({ session, t, onBack, onSave }) {
+function ExerciseEditor({ session, exercises, lang, t, onBack, onSave }) {
   const [equipment, setEquipment] = useState("");
   const [query, setQuery] = useState("");
   const [info, setInfo] = useState(null);
+  const [aiResult, setAiResult] = useState(null);
+  const [aiState, setAiState] = useState("idle");
+  const requestIdRef = useRef(0);
 
-  const scopedExercises = useMemo(
+  const muscleScopedExercises = useMemo(
     () =>
-      EXERCISES.filter(
-        (x) =>
-          (!equipment || x.equipment === equipment) &&
-          x.muscles.some((m) => session.groups.includes(m)),
+      exercises.filter((x) =>
+        x.muscles.some((m) => session.groups.includes(m)),
       ),
-    [equipment, session.groups],
+    [exercises, session.groups],
+  );
+
+  const exactEquipmentExercises = useMemo(
+    () =>
+      muscleScopedExercises.filter(
+        (x) => !equipment || x.equipment === equipment,
+      ),
+    [muscleScopedExercises, equipment],
   );
 
   const filtered = useMemo(() => {
-    const directMatches = scopedExercises.filter((x) =>
-      x.name.toLowerCase().includes(query.toLowerCase()),
-    );
+    if (!query.trim()) return exactEquipmentExercises;
+
+    const normalizedQuery = normalizeText(query);
+    const directMatches = exactEquipmentExercises.filter((x) => {
+      const aliases = (x.aliases || []).map(normalizeText).join(" ");
+      const canonical = normalizeText(x.canonical || x.name);
+      return (
+        normalizeText(x.name).includes(normalizedQuery) ||
+        canonical.includes(normalizedQuery) ||
+        aliases.includes(normalizedQuery)
+      );
+    });
 
     if (directMatches.length) return directMatches;
-    return getFuzzyExerciseMatches(query, scopedExercises);
-  }, [query, scopedExercises]);
+    return getFuzzyExerciseMatches(query, exactEquipmentExercises);
+  }, [query, exactEquipmentExercises]);
 
-  const suggestion = query.trim() ? filtered[0] : null;
+  const crossEquipmentSuggestion = useMemo(() => {
+    if (!query.trim()) return null;
+
+    const matches = getFuzzyExerciseMatches(query, muscleScopedExercises, 3);
+    if (!matches.length) return null;
+
+    const best = matches[0];
+    if (equipment && best.equipment === equipment) return null;
+
+    const score = scoreExerciseMatch(query, best);
+    return score >= 220 ? best : null;
+  }, [query, muscleScopedExercises, equipment]);
+
+  useEffect(() => {
+    if (!query.trim()) {
+      setAiResult(null);
+      setAiState("idle");
+      return undefined;
+    }
+
+    const localBest = filtered[0] || crossEquipmentSuggestion;
+    const localScore = localBest ? scoreExerciseMatch(query, localBest) : 0;
+    const shouldUseAI = query.trim().length >= 3 && localScore < 220;
+
+    if (!shouldUseAI) {
+      setAiResult(null);
+      setAiState(localBest ? "local" : "idle");
+      return undefined;
+    }
+
+    setAiState("loading");
+    const currentRequest = requestIdRef.current + 1;
+    requestIdRef.current = currentRequest;
+
+    const timer = setTimeout(async () => {
+      const result = await aiMatchExercise({
+        query,
+        selectedEquipment: equipment,
+        selectedMuscles: session.groups,
+        exercises: muscleScopedExercises,
+        lang,
+      });
+
+      if (requestIdRef.current !== currentRequest) return;
+
+      if (!result) {
+        setAiResult(null);
+        setAiState("error");
+        return;
+      }
+
+      const candidate = {
+        id: result.exerciseId || `ai-${normalizeText(result.exerciseName || query)}`,
+        name: result.exerciseName || query,
+        canonical: result.canonical || result.exerciseName || query,
+        aliases: result.aliases || [],
+        equipment: result.equipment || equipment || "Machine",
+        muscles: Array.isArray(result.muscles) && result.muscles.length ? result.muscles : session.groups,
+        how: result.how || "",
+        tips: result.tips || result.reason || "",
+        reason: result.reason || "",
+        isCustom: result.matchType === "new_suggestion",
+        matchType: result.matchType,
+        confidence: result.confidence,
+        source: "ai",
+      };
+
+      setAiResult(candidate);
+      setAiState("done");
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [query, equipment, filtered, crossEquipmentSuggestion, session.groups, muscleScopedExercises, lang]);
+
+  const suggestion = aiResult || crossEquipmentSuggestion || (query.trim() ? filtered[0] : null);
   const showSuggestion =
     !!suggestion &&
     normalizeText(suggestion.name) !== normalizeText(query) &&
-    !suggestion.name.toLowerCase().includes(query.toLowerCase());
+    !normalizeText(suggestion.name).includes(normalizeText(query));
+
+  const helperText =
+    aiState === "loading"
+      ? "Checking the AI spotter for a smarter match..."
+      : aiState === "error"
+        ? "The AI fallback stumbled. Local matching is still active."
+        : aiResult?.isCustom
+          ? "AI found a likely exercise that is not in your list yet. Tap to create it."
+          : aiResult
+            ? "AI found a strong match. Tap to use it."
+            : !!equipment && !filtered.length && !!query.trim()
+              ? "No exact hit. Try another spelling or a different equipment filter."
+              : !equipment
+                ? t("chooseEquipment")
+                : "";
 
   return (
     <Background>
@@ -1640,9 +1888,7 @@ function ExerciseEditor({ session, t, onBack, onSave }) {
               autoCapitalize="words"
               autoCorrect
             />
-            {!equipment && (
-              <Text style={styles.helper}>{t("chooseEquipment")}</Text>
-            )}
+            {!!helperText && <Text style={styles.helper}>{helperText}</Text>}
 
             {showSuggestion && (
               <Pressable
@@ -1652,10 +1898,16 @@ function ExerciseEditor({ session, t, onBack, onSave }) {
                   onSave(suggestion);
                 }}
               >
-                <Text style={styles.smartSuggestionLabel}>Smart match</Text>
+                <Text style={styles.smartSuggestionLabel}>
+                  {aiResult?.isCustom ? "Create with AI" : aiResult ? "AI match" : "Smart match"}
+                </Text>
                 <Text style={styles.smartSuggestionName}>{suggestion.name}</Text>
                 <Text style={styles.smartSuggestionMeta}>
-                  Tap to use the exercise your user probably meant.
+                  {aiResult?.isCustom
+                    ? `Create ${suggestion.name} under ${suggestion.equipment}.`
+                    : equipment && suggestion.equipment !== equipment
+                      ? `Closest match found under ${suggestion.equipment} equipment. Tap to use it anyway.`
+                      : aiResult?.reason || "Tap to use the exercise your user probably meant."}
                 </Text>
               </Pressable>
             )}
@@ -1679,12 +1931,6 @@ function ExerciseEditor({ session, t, onBack, onSave }) {
                 </Pressable>
               </View>
             ))}
-
-            {!!equipment && !filtered.length && !!query.trim() && (
-              <Text style={styles.helper}>
-                No exact hit. Try another spelling or a different equipment filter.
-              </Text>
-            )}
           </View>
         </ScrollView>
         <InfoModal
@@ -1781,6 +2027,7 @@ export default function App() {
   const [weightUnit, setWeightUnit] = useState("Kg");
   const [splashDone, setSplashDone] = useState(false);
   const [sessions, setSessions] = useState([]);
+  const [customExercises, setCustomExercises] = useState([]);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [authSession, setAuthSession] = useState(null);
   const [authBusy, setAuthBusy] = useState(false);
@@ -1878,6 +2125,8 @@ export default function App() {
     setAuthBusy(false);
   };
 
+  const allExercises = useMemo(() => [...EXERCISES, ...customExercises], [customExercises]);
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     setRoute("login");
@@ -1911,6 +2160,27 @@ export default function App() {
   };
 
   const addExercise = async (item) => {
+    const resolvedItem = {
+      id: item.id || `custom-${Date.now()}`,
+      name: item.name,
+      canonical: item.canonical || item.name,
+      aliases: item.aliases || [],
+      equipment: item.equipment,
+      muscles: item.muscles || activeSession?.groups || [],
+      how: item.how || "",
+      tips: item.tips || item.reason || "",
+      isCustom: !!item.isCustom,
+    };
+
+    if (resolvedItem.isCustom) {
+      setCustomExercises((prev) => {
+        if (prev.some((exercise) => normalizeText(exercise.name) === normalizeText(resolvedItem.name) && exercise.equipment === resolvedItem.equipment)) {
+          return prev;
+        }
+        return [...prev, resolvedItem];
+      });
+    }
+
     let updatedSession = null;
 
     setSessions((prev) =>
@@ -1922,9 +2192,9 @@ export default function App() {
             ...s.exercises,
             {
               id: String(Date.now()),
-              exerciseId: item.id,
-              name: item.name,
-              equipment: item.equipment,
+              exerciseId: resolvedItem.id,
+              name: resolvedItem.name,
+              equipment: resolvedItem.equipment,
               weight: "",
               reps: "",
             },
@@ -2028,6 +2298,8 @@ export default function App() {
     return (
       <ExerciseEditor
         session={activeSession}
+        exercises={allExercises}
+        lang={lang}
         t={t}
         onBack={() => setRoute("detail")}
         onSave={addExercise}
@@ -2260,26 +2532,28 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    width: 118,
+    width: 86,
     justifyContent: "center",
-    alignItems: "flex-end",
+    alignItems: "center",
+    backgroundColor: "transparent",
   },
   deleteIconWrap: {
-    height: "100%",
-    width: 112,
-    borderTopRightRadius: 24,
-    borderBottomRightRadius: 24,
-    backgroundColor: "rgba(210,43,43,0.92)",
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: "rgba(210,43,43,0.78)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
     alignItems: "center",
     justifyContent: "center",
   },
   deleteIcon: {
     color: "#fff",
-    fontSize: 34,
+    fontSize: 28,
     fontWeight: "800",
-    lineHeight: 34,
+    lineHeight: 28,
+    marginTop: -2,
   },
-  deleteText: { color: "#fff", fontSize: 13, fontWeight: "700", marginTop: 4 },
   swipeContent: { width: "100%" },
 
   exerciseCard: {
