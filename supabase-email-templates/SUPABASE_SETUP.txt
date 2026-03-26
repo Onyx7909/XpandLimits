@@ -1,0 +1,17 @@
+SUPABASE SETUP
+
+1. Open Supabase Dashboard.
+2. Go to Authentication -> URL Configuration.
+3. Add this Redirect URL:
+   xpandlimits://auth/callback
+4. Go to Authentication -> Email Templates.
+5. Paste confirm-signup.html into Confirm signup.
+6. Paste reset-password.html into Reset password.
+7. Keep your app scheme in app.json as:
+   "scheme": "xpandlimits"
+
+NOTES
+- Sign up now sends emailRedirectTo = xpandlimits://auth/callback
+- Forgot password now sends redirectTo = xpandlimits://auth/callback
+- The app now opens a reset-password screen after a recovery link
+- After entering a new password, the app calls supabase.auth.updateUser({ password })

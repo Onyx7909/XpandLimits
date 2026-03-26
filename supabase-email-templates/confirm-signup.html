@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+  <body style="margin:0;padding:0;background:#050915;font-family:Arial,Helvetica,sans-serif;color:#f4f8ff;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#050915;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#0b1220;border:1px solid #1a2940;border-radius:20px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,0.35);">
+            <tr>
+              <td style="padding:36px 32px 20px 32px;text-align:center;background:linear-gradient(180deg,#0d1526 0%,#0b1220 100%);">
+                <div style="font-size:34px;font-weight:900;letter-spacing:0.4px;line-height:1.1;"><span style="color:#e33232;">X</span><span style="color:#f4f8ff;">-pand Limits</span></div>
+                <div style="margin-top:10px;color:#9fb2c7;font-size:14px;">Train. Track. Break through.</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px 32px 32px 32px;">
+                <h1 style="margin:8px 0 12px 0;font-size:26px;line-height:1.25;color:#ffffff;">Welcome to X-pand Limits</h1>
+                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.7;color:#d7e7ff;">Your account is almost ready. Confirm your email address to activate your profile and start syncing your sessions.</p>
+                <table role="presentation" cellspacing="0" cellpadding="0" style="margin:26px 0;"><tr><td align="center" bgcolor="#d22b2b" style="border-radius:14px;"><a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:16px 24px;font-size:16px;font-weight:800;color:#ffffff;text-decoration:none;">Confirm email</a></td></tr></table>
+                <p style="margin:0 0 14px 0;font-size:14px;line-height:1.7;color:#b3c5dc;">If the button doesn’t work, copy and paste this link into your browser:</p>
+                <p style="margin:0 0 22px 0;font-size:13px;line-height:1.7;word-break:break-all;color:#9fb2c7;">{{ .ConfirmationURL }}</p>
+                <div style="margin-top:28px;padding-top:18px;border-top:1px solid #1a2940;color:#8fa5bf;font-size:12px;line-height:1.7;">This email was sent to {{ .Email }}.<br />If you did not create an account, you can safely ignore this message.</div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -2108,6 +2108,78 @@ function SettingsScreen({ lang, setLang, weightUnit, setWeightUnit, t, onBack, u
   );
 }
 
+
+function ResetPassword({ busy, errorText, infoText, onSavePassword, onBackToLogin }) {
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(18)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 520,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 520,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [opacity, translateY]);
+
+  return (
+    <Background>
+      <Animated.View style={[styles.screen, { opacity, transform: [{ translateY }] }]}>
+        <Brand />
+        <View style={styles.loginCard}>
+          <Text style={styles.cardTitle}>Reset password</Text>
+          <Text style={styles.helper}>
+            Choose a new password for your X-pand Limits account.
+          </Text>
+
+          {!!errorText && <Text style={styles.errorText}>{errorText}</Text>}
+          {!!infoText && !errorText && <Text style={styles.infoText}>{infoText}</Text>}
+
+          <TextInput
+            placeholder="New password"
+            placeholderTextColor="#9fb2c7"
+            style={styles.input}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+
+          <TextInput
+            placeholder="Confirm new password"
+            placeholderTextColor="#9fb2c7"
+            style={styles.input}
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            secureTextEntry
+          />
+
+          <Pressable
+            style={[styles.primaryButton, busy && styles.buttonDisabled]}
+            disabled={busy}
+            onPress={() => onSavePassword(password, confirmPassword)}
+          >
+            <Text style={styles.primaryButtonText}>{busy ? "Saving..." : "Save new password"}</Text>
+          </Pressable>
+
+          <Pressable style={styles.secondaryButton} onPress={onBackToLogin}>
+            <Text style={styles.secondaryButtonText}>Back to sign in</Text>
+          </Pressable>
+        </View>
+      </Animated.View>
+    </Background>
+  );
+}
+
 export default function App() {
   const [route, setRoute] = useState("login");
   const [lang, setLang] = useState("en");
@@ -2121,6 +2193,7 @@ export default function App() {
   const [authError, setAuthError] = useState("");
   const [authInfo, setAuthInfo] = useState("");
   const [loadingRemote, setLoadingRemote] = useState(true);
+  const [recoveryMode, setRecoveryMode] = useState(false);
 
   const t = (key) => tFor(lang, key);
   const activeSession = sessions.find((s) => s.id === activeSessionId);
@@ -2139,8 +2212,25 @@ export default function App() {
 
     bootstrap();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       setAuthSession(session ?? null);
+
+      if (event === "PASSWORD_RECOVERY") {
+        setRecoveryMode(true);
+        setAuthError("");
+        setAuthInfo("Recovery link verified. Enter your new password.");
+        if (splashDone) setRoute("reset-password");
+        return;
+      }
+
+      if (recoveryMode && event === "USER_UPDATED") {
+        setRecoveryMode(false);
+        setAuthError("");
+        setAuthInfo("Password updated. You can sign in now.");
+        if (splashDone) setRoute(session ? "sessions" : "login");
+        return;
+      }
+
       if (splashDone) setRoute(session ? "sessions" : "login");
       if (!session) {
         setSessions([]);
@@ -2152,11 +2242,16 @@ export default function App() {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [splashDone]);
+  }, [splashDone, recoveryMode]);
 
   useEffect(() => {
-    if (splashDone) setRoute(authSession ? "sessions" : "login");
-  }, [splashDone, authSession]);
+    if (!splashDone) return;
+    if (recoveryMode) {
+      setRoute("reset-password");
+      return;
+    }
+    setRoute(authSession ? "sessions" : "login");
+  }, [splashDone, authSession, recoveryMode]);
 
   useEffect(() => {
     const createSessionFromUrl = async (url) => {
@@ -2173,12 +2268,24 @@ export default function App() {
             refresh_token: refreshToken,
           });
           if (error) throw error;
-          setAuthInfo("Signed in successfully.");
+
+          if (params.type === "recovery") {
+            setRecoveryMode(true);
+            setAuthError("");
+            setAuthInfo("Recovery link verified. Enter your new password.");
+            setRoute("reset-password");
+          } else {
+            setRecoveryMode(false);
+            setAuthInfo("Signed in successfully.");
+          }
           return;
         }
 
         if (params.type === "recovery") {
-          setAuthInfo("Recovery link opened. You can now reset your password from the email flow.");
+          setRecoveryMode(true);
+          setAuthError("");
+          setAuthInfo("Recovery link opened. Enter your new password.");
+          setRoute("reset-password");
         }
       } catch (error) {
         console.log("Deep link auth error:", error.message);
@@ -2261,7 +2368,13 @@ export default function App() {
     setAuthInfo("");
 
     try {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectTo,
+        },
+      });
       if (error) throw error;
       setAuthInfo("Account created. Check your email if confirmation is enabled, then sign in.");
     } catch (error) {
@@ -2288,6 +2401,45 @@ export default function App() {
       });
       if (error) throw error;
       setAuthInfo("Password reset email sent.");
+    } catch (error) {
+      setAuthError(error.message);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleSaveNewPassword = async (password, confirmPassword) => {
+    const cleanPassword = password.trim();
+    const cleanConfirmPassword = confirmPassword.trim();
+
+    if (!cleanPassword || !cleanConfirmPassword) {
+      setAuthError("Enter and confirm your new password.");
+      setAuthInfo("");
+      return;
+    }
+
+    if (cleanPassword.length < 6) {
+      setAuthError("Use a password with at least 6 characters.");
+      setAuthInfo("");
+      return;
+    }
+
+    if (cleanPassword !== cleanConfirmPassword) {
+      setAuthError("Passwords do not match.");
+      setAuthInfo("");
+      return;
+    }
+
+    setAuthBusy(true);
+    setAuthError("");
+    setAuthInfo("");
+
+    try {
+      const { error } = await supabase.auth.updateUser({ password: cleanPassword });
+      if (error) throw error;
+      setRecoveryMode(false);
+      setAuthInfo("Password updated. Sign in with your new password.");
+      setRoute("login");
     } catch (error) {
       setAuthError(error.message);
     } finally {
@@ -2340,6 +2492,7 @@ export default function App() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
+    setRecoveryMode(false);
     setRoute("login");
   };
 
@@ -2470,6 +2623,20 @@ export default function App() {
   };
 
   if (!splashDone) return <IntroGate onDone={() => setSplashDone(true)} />;
+  if (route === "reset-password")
+    return (
+      <ResetPassword
+        busy={authBusy}
+        errorText={authError}
+        infoText={authInfo}
+        onSavePassword={handleSaveNewPassword}
+        onBackToLogin={() => {
+          setRecoveryMode(false);
+          setAuthError("");
+          setRoute("login");
+        }}
+      />
+    );
   if (route === "login")
     return (
       <Login
