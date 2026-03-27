@@ -1,0 +1,20 @@
+XPANDLIMITS BEAST MODE UPDATE
+
+Included changes:
+- Sets control changed from vertical swipe to horizontal swipe
+- Swipe left decreases sets
+- Swipe right increases sets
+- The page should no longer fight the sets control as much
+- User is automatically signed out when the app leaves the active state
+  (background/inactive), which covers closing Expo Go in normal use
+
+Files changed:
+- App.js
+
+After extracting:
+1. npm install
+2. npx expo start -c
+
+Note:
+Auto sign-out is triggered when the app moves from active to inactive/background.
+That is the closest reliable app-close behavior available in Expo Go / React Native.
