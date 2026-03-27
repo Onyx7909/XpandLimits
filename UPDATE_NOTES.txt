@@ -1,0 +1,19 @@
+XPANDLIMITS UPDATE
+
+What changed:
+- Removed the auto logout when switching apps
+- Added a real splash gate on startup
+- Splash now stays visible until the user taps the screen
+- After the tap, it transitions into the login screen
+
+Important:
+A mobile app generally cannot reliably detect only "the app was fully closed by the user"
+while ignoring normal app switching/backgrounding, especially in Expo Go.
+So I removed the background logout behavior instead of faking it badly.
+
+Files changed:
+- App.js
+
+After extracting:
+1. npm install
+2. npx expo start -c

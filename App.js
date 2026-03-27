@@ -1065,6 +1065,34 @@ function normalizeText(value) {
     .trim();
 }
 
+
+function buildExerciseSets(count = 1) {
+  const safeCount = Math.max(1, Math.min(5, Number(count) || 1));
+  return Array.from({ length: safeCount }, (_, index) => ({
+    id: `set-${index + 1}`,
+    weight: "",
+    reps: "",
+  }));
+}
+
+function normalizeExerciseSets(exercise) {
+  if (Array.isArray(exercise?.sets) && exercise.sets.length) {
+    return exercise.sets.slice(0, 5).map((set, index) => ({
+      id: set?.id || `set-${index + 1}`,
+      weight: String(set?.weight ?? ""),
+      reps: String(set?.reps ?? ""),
+    }));
+  }
+
+  return [
+    {
+      id: "set-1",
+      weight: String(exercise?.weight ?? ""),
+      reps: String(exercise?.reps ?? ""),
+    },
+  ];
+}
+
 function levenshtein(a, b) {
   const left = normalizeText(a);
   const right = normalizeText(b);
@@ -1274,15 +1302,15 @@ function Header({ title, onBack, onSettings, t }) {
 function IntroGate({ onDone }) {
   const splashOpacity = useRef(new Animated.Value(0)).current;
   const splashScale = useRef(new Animated.Value(0.9)).current;
-  const loginOpacity = useRef(new Animated.Value(0)).current;
-  const loginTranslateY = useRef(new Animated.Value(36)).current;
   const flashOne = useRef(new Animated.Value(0)).current;
   const flashTwo = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0.96)).current;
   const boltShift = useRef(new Animated.Value(-18)).current;
+  const hintOpacity = useRef(new Animated.Value(0)).current;
+  const [readyToContinue, setReadyToContinue] = useState(false);
 
   useEffect(() => {
-    const animation = Animated.sequence([
+    const entrance = Animated.sequence([
       Animated.parallel([
         Animated.timing(splashOpacity, {
           toValue: 1,
@@ -1340,73 +1368,70 @@ function IntroGate({ onDone }) {
           }),
         ]),
       ]),
-      Animated.delay(950),
-      Animated.parallel([
-        Animated.timing(splashOpacity, {
-          toValue: 0,
-          duration: 520,
-          easing: Easing.inOut(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(splashScale, {
-          toValue: 1.14,
-          duration: 520,
-          easing: Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(loginOpacity, {
-          toValue: 1,
-          duration: 480,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(loginTranslateY, {
-          toValue: 0,
-          duration: 480,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]),
+      Animated.delay(250),
+      Animated.timing(hintOpacity, {
+        toValue: 1,
+        duration: 320,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
     ]);
 
-    animation.start(() => onDone());
-    return () => animation.stop();
-  }, [boltShift, flashOne, flashTwo, loginOpacity, loginTranslateY, onDone, pulse, splashOpacity, splashScale]);
+    entrance.start(() => setReadyToContinue(true));
+    return () => entrance.stop();
+  }, [boltShift, flashOne, flashTwo, hintOpacity, pulse, splashOpacity, splashScale]);
+
+  const handleContinue = () => {
+    if (!readyToContinue) return;
+    Animated.parallel([
+      Animated.timing(hintOpacity, {
+        toValue: 0,
+        duration: 150,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(splashOpacity, {
+        toValue: 0,
+        duration: 420,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(splashScale, {
+        toValue: 1.08,
+        duration: 420,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => onDone());
+  };
 
   return (
     <Background>
-      <Animated.View pointerEvents="none" style={[styles.introFlash, { opacity: flashOne }]} />
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.introFlashSecondary, { opacity: flashTwo }]}
-      />
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.introSplashLayer,
-          {
-            opacity: splashOpacity,
-            transform: [{ scale: splashScale }, { translateY: boltShift }],
-          },
-        ]}
-      >
-        <Animated.View style={{ transform: [{ scale: pulse }] }}>
-          <Brand large />
-          <Text style={styles.introTagline}>Charge. Lift. Repeat.</Text>
+      <Pressable style={styles.introTapLayer} onPress={handleContinue}>
+        <Animated.View pointerEvents="none" style={[styles.introFlash, { opacity: flashOne }]} />
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.introFlashSecondary, { opacity: flashTwo }]}
+        />
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.introSplashLayer,
+            {
+              opacity: splashOpacity,
+              transform: [{ scale: splashScale }, { translateY: boltShift }],
+            },
+          ]}
+        >
+          <Animated.View style={{ transform: [{ scale: pulse }] }}>
+            <Brand large />
+            <Text style={styles.introTagline}>Charge. Lift. Repeat.</Text>
+          </Animated.View>
         </Animated.View>
-      </Animated.View>
-      <Animated.View
-        style={[
-          styles.introLoginPreview,
-          { opacity: loginOpacity, transform: [{ translateY: loginTranslateY }] },
-        ]}
-      >
-        <Brand />
-        <View style={styles.loginCard}>
-          <Text style={styles.cardTitle}>Sign in</Text>
-          <Text style={styles.helper}>Sign in to sync your sessions</Text>
-        </View>
-      </Animated.View>
+        <Animated.View style={[styles.introTapHintWrap, { opacity: hintOpacity }]}> 
+          <Text style={styles.introTapHint}>Tap anywhere to continue</Text>
+        </Animated.View>
+      </Pressable>
     </Background>
   );
 }
@@ -1730,6 +1755,7 @@ function SessionDetail({
   onAddExercise,
   onDeleteExercise,
   onUpdateExercise,
+  onUpdateExerciseSet,
 }) {
   return (
     <Background>
@@ -1742,42 +1768,54 @@ function SessionDetail({
           {session.exercises.length === 0 && (
             <Text style={styles.emptyText}>{t("noExercises")}</Text>
           )}
-          {session.exercises.map((ex) => (
-            <SwipeRow
-              key={ex.id}
-              onRemove={() => onDeleteExercise(ex.id)}
-              t={t}
-            >
-              <View style={styles.exerciseCard}>
-                <View style={styles.exerciseTop}>
-                  <Text style={styles.exerciseName}>{ex.name}</Text>
-                  <Text style={styles.exerciseTag}>{ex.equipment}</Text>
-                </View>
-                <View style={styles.statsRow}>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statLabel}>{`${t("weight")} (${weightUnit})`}</Text>
-                    <TextInput
-                      style={styles.inlineInput}
-                      value={String(ex.weight)}
-                      keyboardType="numeric"
-                      onChangeText={(v) =>
-                        onUpdateExercise(ex.id, { weight: v })
-                      }
-                    />
+          {session.exercises.map((ex) => {
+            const exerciseSets = normalizeExerciseSets(ex);
+
+            return (
+              <SwipeRow
+                key={ex.id}
+                onRemove={() => onDeleteExercise(ex.id)}
+                t={t}
+              >
+                <View style={styles.exerciseCard}>
+                  <View style={styles.exerciseTop}>
+                    <Text style={styles.exerciseName}>{ex.name}</Text>
+                    <Text style={styles.exerciseTag}>{ex.equipment}</Text>
                   </View>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statLabel}>{t("reps")}</Text>
-                    <TextInput
-                      style={styles.inlineInput}
-                      value={String(ex.reps)}
-                      keyboardType="numeric"
-                      onChangeText={(v) => onUpdateExercise(ex.id, { reps: v })}
-                    />
-                  </View>
+                  <Text style={styles.exerciseSetCount}>
+                    {exerciseSets.length} {exerciseSets.length === 1 ? "set" : "sets"}
+                  </Text>
+                  {exerciseSets.map((set, index) => (
+                    <View key={set.id || `${ex.id}-set-${index + 1}`} style={styles.setBlock}>
+                      <Text style={styles.setTitle}>{`Set ${index + 1}`}</Text>
+                      <View style={styles.statsRow}>
+                        <View style={styles.statBox}>
+                          <Text style={styles.statLabel}>{`${t("weight")} (${weightUnit})`}</Text>
+                          <TextInput
+                            style={styles.inlineInput}
+                            value={String(set.weight)}
+                            keyboardType="numeric"
+                            onChangeText={(v) =>
+                              onUpdateExerciseSet(ex.id, index, { weight: v })
+                            }
+                          />
+                        </View>
+                        <View style={styles.statBox}>
+                          <Text style={styles.statLabel}>{t("reps")}</Text>
+                          <TextInput
+                            style={styles.inlineInput}
+                            value={String(set.reps)}
+                            keyboardType="numeric"
+                            onChangeText={(v) => onUpdateExerciseSet(ex.id, index, { reps: v })}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  ))}
                 </View>
-              </View>
-            </SwipeRow>
-          ))}
+              </SwipeRow>
+            );
+          })}
         </ScrollView>
       </View>
     </Background>
@@ -1807,6 +1845,7 @@ function InfoModal({ visible, item, t, onClose }) {
 function ExerciseEditor({ session, exercises, lang, t, onBack, onSave }) {
   const [equipment, setEquipment] = useState("");
   const [query, setQuery] = useState("");
+  const [setCount, setSetCount] = useState(1);
   const [info, setInfo] = useState(null);
   const [aiResult, setAiResult] = useState(null);
   const [aiState, setAiState] = useState("idle");
@@ -1975,6 +2014,17 @@ function ExerciseEditor({ session, exercises, lang, t, onBack, onSave }) {
               autoCapitalize="words"
               autoCorrect
             />
+            <View style={styles.setCountCard}>
+              <View style={styles.setCountHeader}>
+                <View style={styles.setCountCopy}>
+                  <Text style={styles.fieldLabel}>Sets</Text>
+                  <Text style={styles.setCountSubtext}>
+                    Swipe left to lower sets, swipe right to raise them.
+                  </Text>
+                </View>
+                <SwipeSetControl value={setCount} onChange={setSetCount} />
+              </View>
+            </View>
             {!!helperText && <Text style={styles.helper}>{helperText}</Text>}
 
             {showSuggestion && (
@@ -1982,7 +2032,7 @@ function ExerciseEditor({ session, exercises, lang, t, onBack, onSave }) {
                 style={styles.smartSuggestion}
                 onPress={() => {
                   setQuery(suggestion.name);
-                  onSave(suggestion);
+                  onSave(suggestion, setCount);
                 }}
               >
                 <Text style={styles.smartSuggestionLabel}>
@@ -2005,7 +2055,7 @@ function ExerciseEditor({ session, exercises, lang, t, onBack, onSave }) {
                   style={{ flex: 1 }}
                   onPress={() => {
                     setQuery(item.name);
-                    onSave(item);
+                    onSave(item, setCount);
                   }}
                 >
                   <Text style={styles.lookupName}>{item.name}</Text>
@@ -2028,6 +2078,97 @@ function ExerciseEditor({ session, exercises, lang, t, onBack, onSave }) {
         />
       </View>
     </Background>
+  );
+}
+
+
+
+function SwipeSetControl({ value, onChange }) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+  const lastTriggeredRef = useRef(null);
+
+  const springBack = () => {
+    lastTriggeredRef.current = null;
+    Animated.parallel([
+      Animated.spring(translateX, {
+        toValue: 0,
+        useNativeDriver: true,
+        speed: 20,
+        bounciness: 7,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 20,
+        bounciness: 5,
+      }),
+    ]).start();
+  };
+
+  const changeValue = (direction) => {
+    if (direction === "right" && value < 5) {
+      onChange(value + 1);
+    }
+    if (direction === "left" && value > 1) {
+      onChange(value - 1);
+    }
+  };
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponder: (_, g) =>
+          Math.abs(g.dx) > 4 && Math.abs(g.dx) > Math.abs(g.dy),
+        onMoveShouldSetPanResponderCapture: (_, g) =>
+          Math.abs(g.dx) > 2,
+
+        onPanResponderGrant: () => {
+          Animated.spring(scale, {
+            toValue: 1.04,
+            useNativeDriver: true,
+            speed: 20,
+            bounciness: 5,
+          }).start();
+        },
+
+        onPanResponderMove: (_, g) => {
+          const clampedDx = Math.max(-30, Math.min(30, g.dx));
+          translateX.setValue(clampedDx);
+
+          if (g.dx > 18 && lastTriggeredRef.current !== "right") {
+            lastTriggeredRef.current = "right";
+            changeValue("right");
+          } else if (g.dx < -18 && lastTriggeredRef.current !== "left") {
+            lastTriggeredRef.current = "left";
+            changeValue("left");
+          } else if (Math.abs(g.dx) < 8) {
+            lastTriggeredRef.current = null;
+          }
+        },
+
+        onPanResponderRelease: springBack,
+        onPanResponderTerminate: springBack,
+      }),
+    [value]
+  );
+
+  return (
+    <Animated.View
+      {...panResponder.panHandlers}
+      style={[
+        styles.setCountBadge,
+        {
+          transform: [{ translateX }, { scale }],
+        },
+      ]}
+    >
+      <Text style={[styles.setCountBadgeArrow, value <= 1 && styles.setCountBadgeArrowDisabled]}>◀</Text>
+      <Text style={styles.setCountBadgeNumber}>{value}</Text>
+      <Text style={[styles.setCountBadgeArrow, value >= 5 && styles.setCountBadgeArrowDisabled]}>▶</Text>
+    </Animated.View>
   );
 }
 
@@ -2108,6 +2249,78 @@ function SettingsScreen({ lang, setLang, weightUnit, setWeightUnit, t, onBack, u
   );
 }
 
+
+function ResetPassword({ busy, errorText, infoText, onSavePassword, onBackToLogin }) {
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(18)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 520,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 520,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [opacity, translateY]);
+
+  return (
+    <Background>
+      <Animated.View style={[styles.screen, { opacity, transform: [{ translateY }] }]}>
+        <Brand />
+        <View style={styles.loginCard}>
+          <Text style={styles.cardTitle}>Reset password</Text>
+          <Text style={styles.helper}>
+            Choose a new password for your X-pand Limits account.
+          </Text>
+
+          {!!errorText && <Text style={styles.errorText}>{errorText}</Text>}
+          {!!infoText && !errorText && <Text style={styles.infoText}>{infoText}</Text>}
+
+          <TextInput
+            placeholder="New password"
+            placeholderTextColor="#9fb2c7"
+            style={styles.input}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+
+          <TextInput
+            placeholder="Confirm new password"
+            placeholderTextColor="#9fb2c7"
+            style={styles.input}
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            secureTextEntry
+          />
+
+          <Pressable
+            style={[styles.primaryButton, busy && styles.buttonDisabled]}
+            disabled={busy}
+            onPress={() => onSavePassword(password, confirmPassword)}
+          >
+            <Text style={styles.primaryButtonText}>{busy ? "Saving..." : "Save new password"}</Text>
+          </Pressable>
+
+          <Pressable style={styles.secondaryButton} onPress={onBackToLogin}>
+            <Text style={styles.secondaryButtonText}>Back to sign in</Text>
+          </Pressable>
+        </View>
+      </Animated.View>
+    </Background>
+  );
+}
+
 export default function App() {
   const [route, setRoute] = useState("login");
   const [lang, setLang] = useState("en");
@@ -2121,6 +2334,7 @@ export default function App() {
   const [authError, setAuthError] = useState("");
   const [authInfo, setAuthInfo] = useState("");
   const [loadingRemote, setLoadingRemote] = useState(true);
+  const [recoveryMode, setRecoveryMode] = useState(false);
 
   const t = (key) => tFor(lang, key);
   const activeSession = sessions.find((s) => s.id === activeSessionId);
@@ -2139,8 +2353,25 @@ export default function App() {
 
     bootstrap();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       setAuthSession(session ?? null);
+
+      if (event === "PASSWORD_RECOVERY") {
+        setRecoveryMode(true);
+        setAuthError("");
+        setAuthInfo("Recovery link verified. Enter your new password.");
+        if (splashDone) setRoute("reset-password");
+        return;
+      }
+
+      if (recoveryMode && event === "USER_UPDATED") {
+        setRecoveryMode(false);
+        setAuthError("");
+        setAuthInfo("Password updated. You can sign in now.");
+        if (splashDone) setRoute(session ? "sessions" : "login");
+        return;
+      }
+
       if (splashDone) setRoute(session ? "sessions" : "login");
       if (!session) {
         setSessions([]);
@@ -2152,11 +2383,18 @@ export default function App() {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [splashDone]);
+  }, [splashDone, recoveryMode]);
+
+
 
   useEffect(() => {
-    if (splashDone) setRoute(authSession ? "sessions" : "login");
-  }, [splashDone, authSession]);
+    if (!splashDone) return;
+    if (recoveryMode) {
+      setRoute("reset-password");
+      return;
+    }
+    setRoute(authSession ? "sessions" : "login");
+  }, [splashDone, authSession, recoveryMode]);
 
   useEffect(() => {
     const createSessionFromUrl = async (url) => {
@@ -2173,12 +2411,24 @@ export default function App() {
             refresh_token: refreshToken,
           });
           if (error) throw error;
-          setAuthInfo("Signed in successfully.");
+
+          if (params.type === "recovery") {
+            setRecoveryMode(true);
+            setAuthError("");
+            setAuthInfo("Recovery link verified. Enter your new password.");
+            setRoute("reset-password");
+          } else {
+            setRecoveryMode(false);
+            setAuthInfo("Signed in successfully.");
+          }
           return;
         }
 
         if (params.type === "recovery") {
-          setAuthInfo("Recovery link opened. You can now reset your password from the email flow.");
+          setRecoveryMode(true);
+          setAuthError("");
+          setAuthInfo("Recovery link opened. Enter your new password.");
+          setRoute("reset-password");
         }
       } catch (error) {
         console.log("Deep link auth error:", error.message);
@@ -2261,7 +2511,13 @@ export default function App() {
     setAuthInfo("");
 
     try {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectTo,
+        },
+      });
       if (error) throw error;
       setAuthInfo("Account created. Check your email if confirmation is enabled, then sign in.");
     } catch (error) {
@@ -2288,6 +2544,45 @@ export default function App() {
       });
       if (error) throw error;
       setAuthInfo("Password reset email sent.");
+    } catch (error) {
+      setAuthError(error.message);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleSaveNewPassword = async (password, confirmPassword) => {
+    const cleanPassword = password.trim();
+    const cleanConfirmPassword = confirmPassword.trim();
+
+    if (!cleanPassword || !cleanConfirmPassword) {
+      setAuthError("Enter and confirm your new password.");
+      setAuthInfo("");
+      return;
+    }
+
+    if (cleanPassword.length < 6) {
+      setAuthError("Use a password with at least 6 characters.");
+      setAuthInfo("");
+      return;
+    }
+
+    if (cleanPassword !== cleanConfirmPassword) {
+      setAuthError("Passwords do not match.");
+      setAuthInfo("");
+      return;
+    }
+
+    setAuthBusy(true);
+    setAuthError("");
+    setAuthInfo("");
+
+    try {
+      const { error } = await supabase.auth.updateUser({ password: cleanPassword });
+      if (error) throw error;
+      setRecoveryMode(false);
+      setAuthInfo("Password updated. Sign in with your new password.");
+      setRoute("login");
     } catch (error) {
       setAuthError(error.message);
     } finally {
@@ -2340,6 +2635,7 @@ export default function App() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
+    setRecoveryMode(false);
     setRoute("login");
   };
 
@@ -2370,7 +2666,7 @@ export default function App() {
     }
   };
 
-  const addExercise = async (item) => {
+  const addExercise = async (item, setCount = 1) => {
     const resolvedItem = {
       id: item.id || `custom-${Date.now()}`,
       name: item.name,
@@ -2406,8 +2702,7 @@ export default function App() {
               exerciseId: resolvedItem.id,
               name: resolvedItem.name,
               equipment: resolvedItem.equipment,
-              weight: "",
-              reps: "",
+              sets: buildExerciseSets(setCount),
             },
           ],
         };
@@ -2469,7 +2764,54 @@ export default function App() {
     }
   };
 
+
+  const updateExerciseSet = async (id, setIndex, patch) => {
+    let updatedSession = null;
+
+    setSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== activeSessionId) return s;
+        updatedSession = {
+          ...s,
+          exercises: s.exercises.map((e) => {
+            if (e.id !== id) return e;
+            const normalizedSets = normalizeExerciseSets(e);
+            return {
+              ...e,
+              sets: normalizedSets.map((set, index) =>
+                index === setIndex ? { ...set, ...patch } : set,
+              ),
+            };
+          }),
+        };
+        return updatedSession;
+      }),
+    );
+
+    if (userId && updatedSession) {
+      try {
+        await updateRemoteSession(userId, updatedSession);
+      } catch (error) {
+        console.log("Failed to update exercise set:", error.message);
+      }
+    }
+  };
+
   if (!splashDone) return <IntroGate onDone={() => setSplashDone(true)} />;
+  if (route === "reset-password")
+    return (
+      <ResetPassword
+        busy={authBusy}
+        errorText={authError}
+        infoText={authInfo}
+        onSavePassword={handleSaveNewPassword}
+        onBackToLogin={() => {
+          setRecoveryMode(false);
+          setAuthError("");
+          setRoute("login");
+        }}
+      />
+    );
   if (route === "login")
     return (
       <Login
@@ -2514,6 +2856,7 @@ export default function App() {
         onAddExercise={() => setRoute("create-exercise")}
         onDeleteExercise={deleteExercise}
         onUpdateExercise={updateExercise}
+        onUpdateExerciseSet={updateExerciseSet}
       />
     );
   if (route === "create-exercise" && activeSession)
@@ -2561,6 +2904,25 @@ const styles = StyleSheet.create({
   },
   contentWrap: { flex: 1 },
   splashCenter: { flex: 1, alignItems: "center", justifyContent: "center" },
+  introTapLayer: { flex: 1 },
+  introTapHintWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 72,
+    alignItems: "center",
+  },
+  introTapHint: {
+    color: "rgba(255,255,255,0.92)",
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    backgroundColor: "rgba(8,12,24,0.42)",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 18,
+    overflow: "hidden",
+  },
   introSplashLayer: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
@@ -2865,6 +3227,111 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 6,
+  },
+  exerciseSetCount: { color: "#9eb4cf", fontSize: 13, fontWeight: "700", marginBottom: 12 },
+  setBlock: { marginTop: 6, marginBottom: 10 },
+  setTitle: { color: "#eef5ff", fontSize: 14, fontWeight: "800", marginBottom: 8 },
+  fieldLabel: { color: "#9eb4cf", fontSize: 12, fontWeight: "700", marginTop: 4, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 },
+  setCountCard: {
+    marginBottom: 16,
+    borderRadius: 22,
+    padding: 14,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  setCountHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  setCountCopy: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  setCountSubtext: {
+    color: "#b9c9db",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  setCountBadge: {
+    width: 108,
+    height: 64,
+    borderRadius: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: "rgba(210,43,43,0.22)",
+    borderWidth: 1,
+    borderColor: "rgba(255,110,110,0.3)",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+  },
+  setCountBadgeArrow: {
+    color: "#ffdede",
+    fontSize: 14,
+    fontWeight: "800",
+    opacity: 0.75,
+  },
+  setCountBadgeArrowDisabled: {
+    opacity: 0.25,
+  },
+  setCountBadgeNumber: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "900",
+    lineHeight: 26,
+    marginHorizontal: 12,
+  },
+  setCountBadgeLabel: {
+    color: "#ffdede",
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.9,
+    marginTop: 2,
+  },
+  setCountRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  setCountPill: {
+    minWidth: 68,
+    flex: 1,
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+  },
+  setCountPillActive: {
+    backgroundColor: "rgba(210,43,43,0.26)",
+    borderColor: "rgba(255,110,110,0.34)",
+    transform: [{ scale: 1.02 }],
+  },
+  setCountPillNumber: {
+    color: "#eef5ff",
+    fontSize: 20,
+    fontWeight: "900",
+    lineHeight: 22,
+  },
+  setCountPillNumberActive: {
+    color: "#fff",
+  },
+  setCountPillLabel: {
+    color: "#9eb4cf",
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginTop: 4,
+  },
+  setCountPillLabelActive: {
+    color: "#ffe1e1",
   },
   statsRow: { flexDirection: "row", gap: 12 },
   statBox: {
